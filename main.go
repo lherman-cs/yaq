@@ -16,6 +16,7 @@ type Spec struct {
 	Cores    int
 	Mem      int
 	GPUs     int
+	GPUModel string
 	Walltime string
 }
 
@@ -99,8 +100,17 @@ func MustPromptWalltime() string {
 
 func Request(spec Spec) error {
 	command := "qsub"
-	hw := fmt.Sprintf("select=%d:ncpus=%d:mem=%dgb:ngpus=%d,walltime=%s",
-		spec.Chunks, spec.Cores, spec.Mem, spec.GPUs, spec.Walltime)
+	specs := []string{
+		fmt.Sprintf("select=%d", spec.Chunks),
+		fmt.Sprintf("ncpus=%d", spec.Cores),
+		fmt.Sprintf("mem=%dgb", spec.Mem),
+		fmt.Sprintf("ngpus=%d", spec.GPUs),
+	}
+	if spec.GPUs > 0 {
+		specs = append(specs, fmt.Sprintf("gpu_model=%s", spec.GPUModel))
+	}
+
+	hw := fmt.Sprintf("%s,walltime=%s", strings.Join(specs, ":"), spec.Walltime)
 	args := []string{"-I", "-l", hw}
 
 	fmt.Println("Generated:", command, strings.Join(args, " "))
@@ -128,6 +138,18 @@ func main() {
 		GenOpts([]int{0, 1, 2}, "GPU", false))
 	gpus := ans.Value.(int)
 
+	var gpuModel string
+	if gpus > 0 {
+		ans = MustSelect("GPU Model", []Option{
+			{Name: "m2075", Value: "m2075"},
+			{Name: "m2070q", Value: "m2070q"},
+			{Name: "k20", Value: "k20"},
+			{Name: "m40", Value: "k40"},
+			{Name: "p100", Value: "p100"},
+		})
+		gpuModel = ans.Value.(string)
+	}
+
 	walltime := MustPromptWalltime()
 
 	spec := Spec{
@@ -135,6 +157,7 @@ func main() {
 		Cores:    cores,
 		Mem:      mem,
 		GPUs:     gpus,
+		GPUModel: gpuModel,
 		Walltime: walltime,
 	}
 	if err := Request(spec); err != nil {
